@@ -8,10 +8,16 @@ import (
 
 func TestLetStatement(t *testing.T) {
 	input := `
-let x = 5;
-let y = 10;
-let foobar = 838383;
-`
+
+	let x = 5;
+	let y = 10;
+	let foobar = 838383;
+	`
+	// input := `
+	// let x 5;
+	// let = 10;
+	// let 838383;
+	// `
 	l := lexer.New(input)
 	p := New(l)
 	program := p.ParseProgram()
@@ -37,6 +43,33 @@ let foobar = 838383;
 		stmt := program.Statements[i]
 		if !testLetStatement(t, stmt, test.expectedIdentifier) {
 			return
+		}
+	}
+}
+func TestReturnStatements(t *testing.T) {
+	input := `
+ return 5;
+ return 10;
+ return 993322;
+ `
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 3 {
+		t.Errorf("program.Statements errored want %d, but got %d", 3, len(program.Statements))
+	}
+
+	for _, stmt := range program.Statements {
+		returnStmt, ok := stmt.(*ast.ReturnStatement)
+		if !ok {
+			t.Errorf("stmt is not *ast.ReturnStatement got %T want %T", stmt, returnStmt)
+			continue
+		}
+
+		if returnStmt.TokenLiteral() != "return" {
+			t.Errorf("returnStmt has wrong literal got %q, but want %q", returnStmt.TokenLiteral(), "return")
 		}
 	}
 }
