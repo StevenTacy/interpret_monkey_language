@@ -46,6 +46,7 @@ func TestLetStatement(t *testing.T) {
 		}
 	}
 }
+
 func TestReturnStatements(t *testing.T) {
 	input := `
  return 5;
@@ -71,6 +72,66 @@ func TestReturnStatements(t *testing.T) {
 		if returnStmt.TokenLiteral() != "return" {
 			t.Errorf("returnStmt has wrong literal got %q, but want %q", returnStmt.TokenLiteral(), "return")
 		}
+	}
+}
+
+func TestIdentifierExpression(t *testing.T) {
+	input := "foobar;"
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("program do not  have enough statement got %d want %d", len(program.Statements), 1)
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	ident, ok := stmt.Expression.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("exp is not ast.Identifier, got %T", stmt.Expression)
+	}
+
+	if ident.Value != "foobar" {
+		t.Errorf("idtentifier value is wrong got %s want %s", ident.Value, "foobar")
+	}
+
+	if ident.TokenLiteral() != "foobar" {
+		t.Errorf("idtentifier literal is wrong got %s want %s", ident.TokenLiteral(), "foobar")
+	}
+}
+
+func TestIntegerExpression(t *testing.T) {
+	input := "5;"
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("program do not  have enough statement got %d want %d", len(program.Statements), 1)
+	}
+
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement, got %T", program.Statements[0])
+	}
+
+	ident, ok := stmt.Expression.(*ast.IntegerLiteral)
+	if !ok {
+		t.Fatalf("exp is not ast.IntegerLiteral, got %T", stmt.Expression)
+	}
+
+	if ident.Value != 5 {
+		t.Errorf("Integer value is wrong got %d want %d", ident.Value, 5)
+	}
+
+	if ident.TokenLiteral() != "5" {
+		t.Errorf("Integer literal is wrong got %s want %s", ident.TokenLiteral(), "5")
 	}
 }
 
