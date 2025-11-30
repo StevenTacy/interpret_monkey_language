@@ -12,13 +12,13 @@ var (
 	FALSE = &object.Boolean{Value: false}
 )
 
-func Eval(node ast.Node) object.Object {
+func Eval(node ast.Node, en *object.Environment) object.Object {
 	switch node := node.(type) {
 	case *ast.Program:
-		return evalProgram(node)
+		return evalProgram(node, en)
 
 	case *ast.ExpressionStatement:
-		return Eval(node.Expression)
+		return Eval(node.Expression, en)
 
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
@@ -27,45 +27,72 @@ func Eval(node ast.Node) object.Object {
 		return nativeBoolToBooleanObject(node.Value)
 
 	case *ast.PrefixExpression:
-		right := Eval(node.Right)
+		right := Eval(node.Right, en)
 		if isError(right) {
 			return right
 		}
 		return evalPrefixExpression(node.Operator, right)
 
 	case *ast.InfixExpression:
-		left := Eval(node.Left)
+		left := Eval(node.Left, en)
 		if isError(left) {
 			return left
 		}
-		right := Eval(node.Right)
+		right := Eval(node.Right, en)
 		if isError(right) {
 			return right
 		}
 		return evalInfixExpression(node.Operator, left, right)
 
 	case *ast.BlockStatement:
-		return evalBlockStatement(node)
+		return evalBlockStatement(node, en)
 
 	case *ast.IfExpression:
-		return evalIfExpression(node)
+		return evalIfExpression(node, en)
 
 	case *ast.ReturnStatement:
-		val := Eval(node.ReturnValue)
+		val := Eval(node.ReturnValue, en)
 		if isError(val) {
 			return val
 		}
 		return &object.ReturnValue{Value: val}
+
+	case *ast.LetStatement:
+		val := Eval(node.Value, en)
+		if isError(val) {
+			return val
+		}
+		en.Set(node.Name.Value, val)
+
+	case *ast.Identifier:
+		return evalIdentifier(node, en)
+
+	case *ast.FunctionLiteral:
+		params := node.Parameters
+		body := node.Body
+
+		return &object.Function{Parameters: params, Env: en, Body: body}
+
+	case *ast.CallExpression:
+		function := Eval(node.Function, en)
+		if isError(function) {
+			return function
+		}
+
+		args := evalExpressions(node.Arguments, en)
+		if len(args) == 1 && isError(args[0]) {
+			return args[0]
+		}
 	}
 
 	return nil
 }
 
-func evalStatements(stmts []ast.Statement) object.Object {
+func evalStatements(stmts []ast.Statement, env *object.Environment) object.Object {
 	var res object.Object
 
 	for _, stmt := range stmts {
-		res = Eval(stmt)
+		res = Eval(stmt, env)
 
 		// if currently evaluating return statement
 		if returnVal, ok := res.(*object.ReturnValue); ok {
@@ -168,13 +195,13 @@ func evalIntegerInfixExpression(operator string, left, right object.Object) obje
 	}
 }
 
-func evalIfExpression(ie *ast.IfExpression) object.Object {
-	condition := Eval(ie.Condition)
+func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Object {
+	condition := Eval(ie.Condition, env)
 
 	if isTruthy(condition) {
-		return Eval(ie.Consequence)
+		return Eval(ie.Consequence, env)
 	} else if ie.Alternative != nil {
-		return Eval(ie.Alternative)
+		return Eval(ie.Alternative, env)
 	} else {
 		return NULL
 	}
@@ -194,11 +221,11 @@ func isTruthy(obj object.Object) bool {
 	}
 }
 
-func evalProgram(program *ast.Program) object.Object {
+func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	var res object.Object
 
 	for _, stmt := range program.Statements {
-		res = Eval(stmt)
+		res = Eval(stmt, env)
 
 		switch res := res.(type) {
 
@@ -213,11 +240,11 @@ func evalProgram(program *ast.Program) object.Object {
 	return res
 }
 
-func evalBlockStatement(bs *ast.BlockStatement) object.Object {
+func evalBlockStatement(bs *ast.BlockStatement, env *object.Environment) object.Object {
 	var res object.Object
 
 	for _, stmt := range bs.Statements {
-		res = Eval(stmt)
+		res = Eval(stmt, env)
 
 		if res != nil {
 			rt := res.Type()
@@ -242,4 +269,27 @@ func isError(obj object.Object) bool {
 	}
 
 	return false
+}
+
+func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
+	val, ok := env.Get(node.Value)
+	if !ok {
+		return newError("Identifier not found: %s", node.Value)
+	}
+
+	return val
+}
+
+func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Object {
+	var res []object.Object
+
+	for _, e := range exps {
+		evaluated := Eval(e, env)
+		if isError(evaluated) {
+			return []object.Object{evaluated}
+		}
+		res = append(res, evaluated)
+	}
+
+	return res
 }
