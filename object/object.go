@@ -53,6 +53,13 @@ func NewEnvironment() *Environment {
 	return &Environment{store: s, outer: nil}
 }
 
+type String struct {
+	Value string
+}
+
+func (s *String) Type() ObjectType { return STRING_OBJ }
+func (s *String) Inspect() string  { return s.Value }
+
 type Environment struct {
 	store map[string]Object
 	outer *Environment
@@ -71,6 +78,15 @@ func (en *Environment) Set(name string, val Object) Object {
 	en.store[name] = val
 	return val
 }
+
+type BuiltinFunction func(args ...Object) Object
+
+type Builtin struct {
+	Fn BuiltinFunction
+}
+
+func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (b *Builtin) Inspect() string  { return "builtin function" }
 
 type FunctionLiteral struct {
 	Token      token.Token
@@ -110,10 +126,12 @@ func NewEnclosedEnvironment(outer *Environment) *Environment {
 }
 
 const (
+	STRING_OBJ   = "STRING"
 	INTEGER_OBJ  = "INTEGER"
 	BOOLEAN_OBJ  = "BOOLEAN"
 	NULL_OBJ     = "NULL"
 	RETURN_OBJ   = "RETURN_OBJ"
 	ERROR_OBJ    = "ERROR"
 	FUNCTION_OBJ = "FUNCTION"
+	BUILTIN_OBJ  = "BUILTIN"
 )
