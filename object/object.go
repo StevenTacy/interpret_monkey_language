@@ -50,15 +50,20 @@ func (e *Error) Inspect() string  { return "ERROR: " + e.Message }
 
 func NewEnvironment() *Environment {
 	s := make(map[string]Object)
-	return &Environment{store: s}
+	return &Environment{store: s, outer: nil}
 }
 
 type Environment struct {
 	store map[string]Object
+	outer *Environment
 }
 
 func (en *Environment) Get(name string) (Object, bool) {
 	obj, ok := en.store[name]
+	if !ok && en.outer != nil {
+		obj, ok = en.outer.Get(name)
+	}
+
 	return obj, ok
 }
 
@@ -96,6 +101,12 @@ func (f *Function) Inspect() string {
 	out.WriteString("\n}")
 
 	return out.String()
+}
+
+func NewEnclosedEnvironment(outer *Environment) *Environment {
+	env := NewEnvironment()
+	env.outer = outer
+	return env
 }
 
 const (
