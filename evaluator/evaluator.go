@@ -12,13 +12,13 @@ var (
 	FALSE = &object.Boolean{Value: false}
 )
 
-func Eval(node ast.Node, en *object.Environment) object.Object {
+func Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	case *ast.Program:
-		return evalProgram(node, en)
+		return evalProgram(node, env)
 
 	case *ast.ExpressionStatement:
-		return Eval(node.Expression, en)
+		return Eval(node.Expression, env)
 
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
@@ -30,60 +30,63 @@ func Eval(node ast.Node, en *object.Environment) object.Object {
 		return nativeBoolToBooleanObject(node.Value)
 
 	case *ast.ArrayLiteral:
-		elements := evalExpressions(node.Elements, en)
+		elements := evalExpressions(node.Elements, env)
 		if len(elements) == 1 && isError(elements[0]) {
 			return elements[0]
 		}
 		return &object.Array{Elements: elements}
 
 	case *ast.PrefixExpression:
-		right := Eval(node.Right, en)
+		right := Eval(node.Right, env)
 		if isError(right) {
 			return right
 		}
 		return evalPrefixExpression(node.Operator, right)
 
 	case *ast.InfixExpression:
-		left := Eval(node.Left, en)
+		left := Eval(node.Left, env)
 		if isError(left) {
 			return left
 		}
-		right := Eval(node.Right, en)
+		right := Eval(node.Right, env)
 		if isError(right) {
 			return right
 		}
 		return evalInfixExpression(node.Operator, left, right)
 
 	case *ast.BlockStatement:
-		return evalBlockStatement(node, en)
+		return evalBlockStatement(node, env)
 
 	case *ast.IfExpression:
-		return evalIfExpression(node, en)
+		return evalIfExpression(node, env)
 
 	case *ast.ReturnStatement:
-		val := Eval(node.ReturnValue, en)
+		val := Eval(node.ReturnValue, env)
 		if isError(val) {
 			return val
 		}
 		return &object.ReturnValue{Value: val}
 
 	case *ast.LetStatement:
-		val := Eval(node.Value, en)
+		val := Eval(node.Value, env)
 		if isError(val) {
 			return val
 		}
-		en.Set(node.Name.Value, val)
+		env.Set(node.Name.Value, val)
 
 	case *ast.Identifier:
-		return evalIdentifier(node, en)
+		return evalIdentifier(node, env)
+
+	case *ast.HashLiteral:
+		return evalHashLiteral(node, env)
 
 	case *ast.IndexExpression:
-		left := Eval(node.Left, en)
+		left := Eval(node.Left, env)
 		if isError(left) {
 			return left
 		}
 
-		index := Eval(node.Index, en)
+		index := Eval(node.Index, env)
 		if isError(index) {
 			return index
 		}
@@ -94,15 +97,15 @@ func Eval(node ast.Node, en *object.Environment) object.Object {
 		params := node.Parameters
 		body := node.Body
 
-		return &object.Function{Parameters: params, Env: en, Body: body}
+		return &object.Function{Parameters: params, Env: env, Body: body}
 
 	case *ast.CallExpression:
-		function := Eval(node.Function, en)
+		function := Eval(node.Function, env)
 		if isError(function) {
 			return function
 		}
 
-		args := evalExpressions(node.Arguments, en)
+		args := evalExpressions(node.Arguments, env)
 		if len(args) == 1 && isError(args[0]) {
 			return args[0]
 		}
@@ -376,6 +379,10 @@ func evalIndexExpression(left, index object.Object) object.Object {
 
 	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
 		return evalArrayIndexExpression(left, index)
+
+	case left.Type() == object.HASH_OBJ:
+		return evalHashIndexExpression(left, index)
+
 	default:
 		return newError("index operator not supported: %s", left.Type())
 	}
@@ -391,4 +398,49 @@ func evalArrayIndexExpression(left, index object.Object) object.Object {
 	}
 
 	return arrayObject.Elements[idx]
+}
+
+// return value corresponding for the input index
+func evalHashIndexExpression(hash, index object.Object) object.Object {
+	hashObject := hash.(*object.Hash)
+
+	// check if the index is a hashable key
+	key, ok := index.(object.Hashable)
+	if !ok {
+		return newError("unusable as hash key: %s", index.Type())
+	}
+
+	pair, ok := hashObject.Pairs[key.HashKey()]
+	// return NULL object if has no value for the key
+	if !ok {
+		return NULL
+	}
+
+	return pair.Value
+}
+
+func evalHashLiteral(node *ast.HashLiteral, env *object.Environment) object.Object {
+	pairs := make(map[object.HashKey]object.HashPair)
+
+	for keyNode, valueNode := range node.Pairs {
+		key := Eval(keyNode, env)
+		if isError(key) {
+			return key
+		}
+
+		hashKey, ok := key.(object.Hashable)
+		if !ok {
+			return newError("unhashedable key: %s", key.Type())
+		}
+
+		value := Eval(valueNode, env)
+		if isError(value) {
+			return value
+		}
+
+		hashed := hashKey.HashKey()
+		pairs[hashed] = object.HashPair{Key: key, Value: value}
+	}
+
+	return &object.Hash{Pairs: pairs}
 }

@@ -150,6 +150,8 @@ if (10 > 1) {
 			"Identifier not found: foobar"},
 		{`"Hello"- "World"`,
 			"unknown operator: STRING - STRING"},
+		{`{"name": "Monkey"}[fn(x) { x }];`,
+			"unusable as hash key: FUNCTION"},
 	}
 
 	for _, test := range tests {
@@ -351,6 +353,78 @@ func TestArrayIndexExpressions(t *testing.T) {
 			testIntegerObject(t, evaluted, int64(integer))
 		} else {
 			testNullObject(t, evaluted)
+		}
+	}
+}
+
+func TestHashLiterals(t *testing.T) {
+	input := `let two = "two";
+{
+"one": 10- 9,
+two: 1 + 1,
+"thr" + "ee": 6 / 2,
+4: 4,
+true: 5,
+false: 6
+}`
+	evaluated := testEval(input)
+	result, ok := evaluated.(*object.Hash)
+	if !ok {
+		t.Errorf("evaluated object is not a Hash object got %T (%+v)", evaluated, evaluated)
+	}
+
+	expected := map[object.HashKey]int64{
+		(&object.String{Value: "one"}).HashKey():   1,
+		(&object.String{Value: "two"}).HashKey():   2,
+		(&object.String{Value: "three"}).HashKey(): 3,
+		(&object.Integer{Value: 4}).HashKey():      4,
+		TRUE.HashKey():                             5,
+		FALSE.HashKey():                            6,
+	}
+
+	if len(result.Pairs) != len(expected) {
+		t.Errorf("evaluating result has wrong number of pairs got %d, but want %d", len(result.Pairs), len(expected))
+	}
+
+	for expectedKey, expectedValue := range expected {
+		pair, ok := result.Pairs[expectedKey]
+		if !ok {
+			t.Errorf("no corresponding pairs for given key, got %T", expectedKey)
+		}
+
+		testIntegerObject(t, pair.Value, expectedValue)
+	}
+}
+
+func TestHashedIndexExpressions(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{`{"foo": 5}["foo"]`,
+			5},
+		{`{"foo": 5}["bar"]`,
+			nil},
+		{`let key = "foo"; {"foo": 5}[key]`,
+			5},
+		{`{}["foo"]`,
+			nil},
+		{`{5: 5}[5]`,
+			5},
+		{`{true: 5}[true]`,
+			5},
+		{`{false: 5}[false]`,
+			5},
+	}
+
+	for _, test := range tests {
+		evaluated := testEval(test.input)
+		// check if the expected for out test case is an integer
+		integer, ok := test.expected.(int)
+		if ok {
+			testIntegerObject(t, evaluated, int64(integer))
+		} else {
+			testNullObject(t, evaluated)
 		}
 	}
 }
